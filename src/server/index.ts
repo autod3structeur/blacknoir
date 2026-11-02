@@ -8,6 +8,7 @@ import { b64, unb64, utf8, verify, verifyPreKey } from "../crypto/index.ts";
 import { Store, type Envelope, type StoredUser } from "./store.ts";
 
 const PORT = Number(process.env.PORT ?? 8787);
+const HOST = process.env.HOST ?? "127.0.0.1";
 const AUTH_PREFIX = "blacknoir-Auth:";
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
 const MAX_PAYLOAD = 128 * 1024;
@@ -374,6 +375,6 @@ wss.on("connection", (ws, req) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`blacknoir relay listening on http://localhost:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`blacknoir relay listening on http://${HOST}:${PORT}`);
 });

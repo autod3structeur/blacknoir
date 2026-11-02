@@ -1,0 +1,6 @@
+# Replace the address with your domain, or use <ip-with-dashes>.sslip.io
+# for free HTTPS without buying a domain. Caddy provisions TLS automatically.
+158-178-196-92.sslip.io {
+	encode gzip
+	reverse_proxy 127.0.0.1:8787
+}
