@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 
 export interface StoredUser {
@@ -14,29 +14,42 @@ export interface StoredUser {
 
 export interface Envelope {
   id: string;
+  cid?: string;
   from: string;
   to: string;
   payload: string;
   ts: number;
 }
 
+export interface BlobMeta {
+  id: string;
+  owner: string;
+  recipient: string;
+  size: number;
+  ts: number;
+}
+
 interface Persisted {
   users: Record<string, StoredUser>;
   messages: Envelope[];
+  blobs: Record<string, BlobMeta>;
 }
 
-const EMPTY: Persisted = { users: {}, messages: [] };
+const EMPTY: Persisted = { users: {}, messages: [], blobs: {} };
 
 export class Store {
   private data: Persisted;
   private readonly file: string;
+  private readonly blobDir: string;
 
   constructor(file = resolve("data/store.json")) {
     this.file = file;
+    this.blobDir = join(dirname(file), "blobs");
     try {
       this.data = JSON.parse(readFileSync(this.file, "utf8")) as Persisted;
       this.data.users ??= {};
       this.data.messages ??= [];
+      this.data.blobs ??= {};
     } catch {
       this.data = structuredClone(EMPTY);
     }
@@ -81,13 +94,35 @@ export class Store {
     return this.data.messages.filter((m) => m.to === username);
   }
 
-  ack(username: string, ids: string[]): void {
+  ack(username: string, ids: string[]): Envelope[] {
     const set = new Set(ids);
-    const before = this.data.messages.length;
-    this.data.messages = this.data.messages.filter(
-      (m) => !(m.to === username && set.has(m.id)),
-    );
-    if (this.data.messages.length !== before) this.persist();
+    const removed = this.data.messages.filter((m) => m.to === username && set.has(m.id));
+    if (removed.length === 0) return [];
+    this.data.messages = this.data.messages.filter((m) => !set.has(m.id));
+    this.persist();
+    return removed;
+  }
+
+  saveBlob(owner: string, recipient: string, data: Uint8Array): BlobMeta {
+    const id = randomUUID();
+    mkdirSync(this.blobDir, { recursive: true });
+    writeFileSync(join(this.blobDir, `${id}.bin`), data);
+    const meta: BlobMeta = { id, owner, recipient, size: data.length, ts: Date.now() };
+    this.data.blobs[id] = meta;
+    this.persist();
+    return meta;
+  }
+
+  getBlob(id: string): BlobMeta | undefined {
+    return this.data.blobs[id];
+  }
+
+  readBlob(id: string): Uint8Array | undefined {
+    try {
+      return readFileSync(join(this.blobDir, `${id}.bin`));
+    } catch {
+      return undefined;
+    }
   }
 
   newId(): string {
